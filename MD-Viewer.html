@@ -1,0 +1,697 @@
+<!-- MD Viewer — built by Sylvia Lin, 2026 -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="author" content="Sylvia Lin">
+<meta name="description" content="拖拉即可瀏覽、編輯 Markdown 檔案的輕量工具，by Sylvia Lin">
+<meta property="og:title" content="MD Viewer">
+<meta property="og:description" content="拖拉即可瀏覽、編輯 Markdown 檔案的輕量工具，by Sylvia Lin">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sinlin0n0.github.io/MD-Viewer/MD-Viewer.html">
+<title>MD Viewer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>👀</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown@7.1.2/dist/turndown.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown-plugin-gfm@1.0.2/dist/turndown-plugin-gfm.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #f6f8fa;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 260px;
+    min-width: 140px;
+    max-width: 600px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  #sidebar-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid #d0d7de;
+    font-size: 12px;
+    font-weight: 600;
+    color: #57606a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  #sidebar-header-left { display: flex; align-items: center; gap: 6px; }
+  #file-count {
+    background: #ddf4ff; color: #0969da;
+    font-size: 11px; font-weight: 600;
+    padding: 1px 6px; border-radius: 10px;
+  }
+  .hdr-btn {
+    font-size: 11px; padding: 2px 8px;
+    border: 1px solid #d0d7de; border-radius: 5px;
+    cursor: pointer; background: #f6f8fa; color: #24292f;
+  }
+  .hdr-btn:hover { background: #eaeef2; }
+
+  #file-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+
+  /* Tree items */
+  .tree-item {
+    display: flex; align-items: center;
+    padding: 5px 0; cursor: pointer;
+    font-size: 13px; color: #24292f;
+    border-left: 3px solid transparent;
+    white-space: nowrap; overflow: hidden;
+    user-select: none;
+  }
+  .tree-item:hover { background: #f6f8fa; }
+  .tree-item.active { background: #ddf4ff; border-left-color: #0969da; color: #0969da; font-weight: 500; }
+  .tree-item .indent { flex-shrink: 0; }
+  .tree-item .chevron { width: 16px; flex-shrink: 0; font-size: 10px; color: #57606a; text-align: center; }
+  .tree-item .icon { width: 18px; flex-shrink: 0; font-size: 13px; }
+  .tree-item .label { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; padding-right: 8px; }
+
+  /* Drop zone */
+  #drop-zone {
+    margin: 10px; padding: 12px;
+    border: 2px dashed #d0d7de; border-radius: 6px;
+    text-align: center; font-size: 12px; color: #57606a;
+    cursor: pointer; transition: all 0.2s; background: #f6f8fa;
+    flex-shrink: 0;
+  }
+  #drop-zone:hover, #drop-zone.dragover { border-color: #0969da; background: #ddf4ff; color: #0969da; }
+  #drop-zone svg { margin-bottom: 4px; opacity: 0.5; }
+  #file-input { display: none; }
+
+  /* ── Resizer ── */
+  #resizer {
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+    z-index: 10;
+  }
+  #resizer:hover, #resizer.dragging { background: #0969da; }
+
+  /* ── Main ── */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; min-width: 0; }
+
+  /* Toolbar */
+  #toolbar {
+    display: none; align-items: center; gap: 2px;
+    padding: 6px 40px; border-bottom: 1px solid #d0d7de;
+    background: #f6f8fa; flex-wrap: wrap; flex-shrink: 0;
+  }
+  .tb-btn {
+    padding: 4px 8px; border: 1px solid transparent; border-radius: 5px;
+    cursor: pointer; background: none; font-size: 13px; font-family: inherit;
+    color: #24292f; transition: background 0.1s; line-height: 1;
+  }
+  .tb-btn:hover { background: #e8ecf0; border-color: #d0d7de; }
+  .tb-sep { width: 1px; height: 20px; background: #d0d7de; margin: 0 4px; }
+
+  #scroll-area { flex: 1; overflow-y: auto; padding: 40px; }
+
+  #empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; color: #57606a; text-align: center; gap: 12px;
+  }
+  #empty-state svg { opacity: 0.3; }
+  #empty-state h2 { font-size: 20px; color: #24292f; }
+  #empty-state p { font-size: 14px; }
+
+  /* Doc header */
+  #doc-header {
+    max-width: 800px; margin: 0 auto 24px;
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 16px; border-bottom: 1px solid #d0d7de;
+  }
+  #doc-filename {
+    font-size: 13px; color: #57606a; background: #f6f8fa;
+    padding: 3px 8px; border-radius: 6px; border: 1px solid #d0d7de;
+    max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #unsaved-dot { width: 7px; height: 7px; border-radius: 50%; background: #e3b341; display: none; flex-shrink: 0; }
+  #save-status { font-size: 12px; color: #57606a; display: none; }
+  .doc-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+  .btn {
+    font-size: 12px; font-weight: 500; padding: 4px 12px;
+    border-radius: 6px; border: 1px solid #d0d7de; cursor: pointer;
+    background: #f6f8fa; color: #24292f; transition: background 0.1s;
+  }
+  .btn:hover { background: #eaeef2; }
+  .btn-primary { background: #0969da; color: #fff; border-color: #0969da; }
+  .btn-primary:hover { background: #0860ca; }
+  .btn-danger { background: #fff; color: #cf222e; border-color: #cf222e; }
+  .btn-danger:hover { background: #fff1ee; }
+
+  /* ── Markdown ── */
+  .markdown-body {
+    max-width: 800px; margin: 0 auto;
+    font-size: 16px; line-height: 1.6; color: #24292f; outline: none;
+  }
+  .markdown-body.editing {
+    border: 2px solid #0969da; border-radius: 8px; padding: 20px 24px;
+    box-shadow: 0 0 0 4px rgba(9,105,218,0.08);
+  }
+  .markdown-body.editing td, .markdown-body.editing th { cursor: text; }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3,
+  .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+    margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25;
+  }
+  .markdown-body h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid #d0d7de; }
+  .markdown-body h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #d0d7de; }
+  .markdown-body h3 { font-size: 1.25em; }
+  .markdown-body h4 { font-size: 1em; }
+  .markdown-body p { margin-bottom: 16px; }
+  .markdown-body a { color: #0969da; text-decoration: none; }
+  .markdown-body a:hover { text-decoration: underline; }
+  .markdown-body code {
+    padding: 0.2em 0.4em; background: #f6f8fa; border-radius: 6px;
+    font-size: 85%; font-family: "SFMono-Regular", Consolas, monospace;
+    color: #24292f; border: 1px solid #d0d7de;
+  }
+  .markdown-body pre {
+    padding: 16px; overflow: auto; background: #f6f8fa;
+    border-radius: 6px; border: 1px solid #d0d7de; margin-bottom: 16px;
+  }
+  .markdown-body pre code { background: none; border: none; padding: 0; font-size: 85%; }
+  .markdown-body blockquote { padding: 0 1em; color: #57606a; border-left: 4px solid #d0d7de; margin: 0 0 16px 0; }
+  .markdown-body table { border-collapse: collapse; width: 100%; margin-bottom: 16px; display: block; overflow-x: auto; }
+  .markdown-body table th, .markdown-body table td { padding: 6px 13px; border: 1px solid #d0d7de; }
+  .markdown-body table tr:nth-child(even) { background: #f6f8fa; }
+  .markdown-body table th { background: #f6f8fa; font-weight: 600; }
+  .markdown-body ul, .markdown-body ol { padding-left: 2em; margin-bottom: 16px; }
+  .markdown-body li { margin-bottom: 4px; }
+  .markdown-body li input[type="checkbox"] { margin-right: 6px; }
+  .markdown-body hr { border: none; border-top: 1px solid #d0d7de; margin: 24px 0; }
+  .markdown-body img { max-width: 100%; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div id="sidebar-header-left">
+      <span>檔案</span>
+      <span id="file-count" style="display:none">0</span>
+    </div>
+    <div style="display:flex;gap:4px">
+      <button class="hdr-btn" onclick="openFilePicker()">+ 檔案</button>
+      <button class="hdr-btn" onclick="openFolderPicker()">+ 資料夾</button>
+    </div>
+  </div>
+  <div id="file-list"></div>
+  <div id="drop-zone">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <div>拖拉 .md / .yaml 檔或資料夾</div>
+  </div>
+  <input type="file" id="file-input" multiple accept=".md,.markdown,.yaml,.yml">
+</div>
+
+<div id="resizer"></div>
+
+<div id="main">
+  <div id="toolbar">
+    <button class="tb-btn" title="標題 1" onmousedown="fmt(event,'formatBlock','h1')"><b>H1</b></button>
+    <button class="tb-btn" title="標題 2" onmousedown="fmt(event,'formatBlock','h2')"><b>H2</b></button>
+    <button class="tb-btn" title="標題 3" onmousedown="fmt(event,'formatBlock','h3')"><b>H3</b></button>
+    <button class="tb-btn" title="內文" onmousedown="fmt(event,'formatBlock','p')">¶</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onmousedown="fmt(event,'bold')"><b>B</b></button>
+    <button class="tb-btn" onmousedown="fmt(event,'italic')"><i>I</i></button>
+    <button class="tb-btn" onmousedown="fmt(event,'strikeThrough')"><s>S</s></button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onmousedown="fmt(event,'insertUnorderedList')">• 清單</button>
+    <button class="tb-btn" onmousedown="fmt(event,'insertOrderedList')">1. 清單</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onmousedown="fmt(event,'formatBlock','blockquote')">" 引用</button>
+    <button class="tb-btn" onmousedown="insertHR(event)">── 分隔線</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onmousedown="insertLink(event)">🔗 連結</button>
+  </div>
+
+  <div id="scroll-area">
+    <div id="empty-state">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <h2>MD Viewer</h2>
+      <p>將 .md 檔或資料夾拖拉進來，或點擊上方按鈕匯入</p>
+      <button id="restore-btn" onclick="initFromDB()" style="display:none;margin-top:8px;padding:8px 20px;background:#0969da;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">↩ 還原上次的檔案</button>
+    </div>
+
+    <div id="doc-header" style="display:none">
+      <span id="doc-filename"></span>
+      <span id="unsaved-dot" title="有未儲存的變更"></span>
+      <div class="doc-actions">
+        <span id="save-status"></span>
+        <button class="btn" id="btn-edit" onclick="enterEditMode()">編輯</button>
+        <button class="btn btn-primary" id="btn-save" style="display:none" onclick="saveFile()">儲存</button>
+        <button class="btn btn-danger" id="btn-restore" style="display:none" onclick="restoreFile()">還原</button>
+      </div>
+    </div>
+
+    <div id="content" class="markdown-body"></div>
+  </div>
+</div>
+
+<script>
+  // files: Map<path, { content, handle }>
+  const files = new Map();
+  // expandedFolders: Set of folder full paths
+  const expandedFolders = new Set();
+  let activeFile = null;
+  let isEditing = false;
+
+  // ── Root handle registry (for cross-session persistence) ─────
+  const rootHandles = [];
+
+  function openDB() {
+    return new Promise((res, rej) => {
+      const req = indexedDB.open('md-viewer', 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore('handles', { keyPath: 'id', autoIncrement: true });
+      req.onsuccess = e => res(e.target.result);
+      req.onerror = e => rej(e.target.error);
+    });
+  }
+
+  async function persistHandles() {
+    try {
+      const db = await openDB();
+      await new Promise((res, rej) => {
+        const tx = db.transaction('handles', 'readwrite');
+        const store = tx.objectStore('handles');
+        store.clear();
+        rootHandles.forEach(({ handle, prefix }) => store.add({ handle, prefix }));
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+    } catch {}
+  }
+
+  async function initFromDB() {
+    let entries = [];
+    try {
+      const db = await openDB();
+      entries = await new Promise((res, rej) => {
+        const req = db.transaction('handles', 'readonly').objectStore('handles').getAll();
+        req.onsuccess = e => res(e.target.result);
+        req.onerror = e => rej(e.target.error);
+      });
+    } catch { return; }
+    if (!entries.length) return;
+    for (const { handle, prefix } of entries) {
+      const mode = handle.kind === 'directory' ? 'readwrite' : 'read';
+      let perm = await handle.queryPermission({ mode });
+      if (perm !== 'granted') perm = await handle.requestPermission({ mode });
+      if (perm !== 'granted') continue;
+      rootHandles.push({ handle, prefix });
+      if (handle.kind === 'directory') await loadDirHandle(handle, prefix);
+      else await loadFileHandle(handle, prefix);
+    }
+    if (files.size > 0) { updateSidebar(); renderFile([...files.keys()].sort()[0]); }
+  }
+
+  const td = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
+  td.use(turndownPluginGfm.gfm);
+  marked.setOptions({ breaks: true, gfm: true });
+
+  // ── Open pickers ──────────────────────────────────────────────
+  async function openFilePicker() {
+    if ('showOpenFilePicker' in window) {
+      let handles;
+      try { handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: 'Markdown / YAML', accept: { 'text/markdown': ['.md', '.markdown'], 'text/yaml': ['.yaml', '.yml'] } }] }); }
+      catch { return; }
+      for (const handle of handles) { await loadFileHandle(handle, ''); rootHandles.push({ handle, prefix: '' }); }
+      await persistHandles();
+    } else {
+      document.getElementById('file-input').click();
+    }
+    updateSidebar();
+    if (!activeFile && files.size > 0) renderFile([...files.keys()][0]);
+  }
+
+  async function openFolderPicker() {
+    if (!('showDirectoryPicker' in window)) { alert('此瀏覽器不支援資料夾選取，請直接拖拉資料夾'); return; }
+    let dirHandle;
+    try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch { return; }
+    await loadDirHandle(dirHandle, '');
+    rootHandles.push({ handle: dirHandle, prefix: '' });
+    await persistHandles();
+    updateSidebar();
+    if (!activeFile && files.size > 0) renderFile([...files.keys()].sort()[0]);
+  }
+
+  async function loadFileHandle(handle, prefix) {
+    const file = await handle.getFile();
+    if (!file.name.match(/\.(md|markdown|yaml|yml)$/i)) return;
+    const path = prefix ? prefix + '/' + file.name : file.name;
+    const content = await file.text();
+    files.set(path, { content, handle });
+  }
+
+  async function loadDirHandle(dirHandle, prefix) {
+    const folderPath = prefix ? prefix + '/' + dirHandle.name : dirHandle.name;
+    for await (const [name, handle] of dirHandle.entries()) {
+      if (handle.kind === 'file') {
+        if (name.match(/\.(md|markdown|yaml|yml)$/i)) {
+          const file = await handle.getFile();
+          const content = await file.text();
+          files.set(folderPath + '/' + name, { content, handle });
+        }
+      } else if (handle.kind === 'directory') {
+        await loadDirHandle(handle, folderPath);
+      }
+    }
+  }
+
+  // Fallback file input
+  document.getElementById('file-input').addEventListener('change', ev => {
+    Array.from(ev.target.files).forEach(file => {
+      if (!file.name.match(/\.(md|markdown|yaml|yml)$/i)) return;
+      const r = new FileReader();
+      r.onload = e => { files.set(file.name, { content: e.target.result, handle: null }); updateSidebar(); if (!activeFile) renderFile(file.name); };
+      r.readAsText(file);
+    });
+    ev.target.value = '';
+  });
+
+  // ── Render file ───────────────────────────────────────────────
+  function renderFile(path) {
+    if (isEditing) exitEditMode(false);
+    activeFile = path;
+    const el = document.getElementById('content');
+    const raw = files.get(path).content;
+    const isYaml = path.match(/\.ya?ml$/i);
+    el.innerHTML = isYaml
+      ? marked.parse('```yaml\n' + raw + '\n```')
+      : marked.parse(raw);
+    el.contentEditable = 'false';
+    el.classList.remove('editing');
+    const name = path.split('/').pop();
+    document.getElementById('doc-filename').textContent = name;
+    document.getElementById('doc-header').style.display = 'flex';
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('btn-edit').style.display = isYaml ? 'none' : 'inline';
+    document.getElementById('unsaved-dot').style.display = 'none';
+    document.getElementById('save-status').style.display = 'none';
+    document.querySelectorAll('.tree-item').forEach(i => i.classList.toggle('active', i.dataset.path === path));
+    document.querySelectorAll('.markdown-body input[type="checkbox"]').forEach(cb => cb.removeAttribute('disabled'));
+
+    // Intercept .md links → navigate within loaded files
+    el.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href');
+      if (!href.match(/\.md(#.*)?$/i)) return;
+      a.addEventListener('click', ev => {
+        ev.preventDefault();
+        const targetName = href.replace(/#.*$/, '').split('/').pop();
+        const match = [...files.keys()].find(p => p.split('/').pop() === targetName);
+        if (match) renderFile(match);
+      });
+    });
+  }
+
+  // ── Edit mode ─────────────────────────────────────────────────
+  function enterEditMode() {
+    if (!activeFile) return;
+    isEditing = true;
+    const el = document.getElementById('content');
+    el.contentEditable = 'true';
+    el.classList.add('editing');
+    el.focus();
+    document.getElementById('toolbar').style.display = 'flex';
+    document.getElementById('btn-edit').style.display = 'none';
+    document.getElementById('btn-save').style.display = 'inline';
+    document.getElementById('btn-restore').style.display = 'inline';
+    el.addEventListener('input', onEditInput);
+  }
+
+  function exitEditMode(rerender) {
+    isEditing = false;
+    const el = document.getElementById('content');
+    el.contentEditable = 'false';
+    el.classList.remove('editing');
+    el.removeEventListener('input', onEditInput);
+    document.getElementById('toolbar').style.display = 'none';
+    document.getElementById('btn-edit').style.display = 'inline';
+    document.getElementById('btn-save').style.display = 'none';
+    document.getElementById('btn-restore').style.display = 'none';
+    document.getElementById('unsaved-dot').style.display = 'none';
+    if (rerender) {
+      el.innerHTML = marked.parse(files.get(activeFile).content);
+      document.querySelectorAll('.markdown-body input[type="checkbox"]').forEach(cb => cb.removeAttribute('disabled'));
+    }
+  }
+
+  async function saveFile() {
+    if (!activeFile) return;
+    const markdown = td.turndown(document.getElementById('content').innerHTML);
+    const entry = files.get(activeFile);
+    const status = document.getElementById('save-status');
+    if (entry.handle) {
+      try {
+        const w = await entry.handle.createWritable();
+        await w.write(markdown); await w.close();
+        entry.content = markdown;
+        status.textContent = '✓ 已儲存至檔案'; status.style.color = '#1a7f37'; status.style.display = 'inline';
+        setTimeout(() => { status.style.display = 'none'; }, 2500);
+        exitEditMode(true);
+      } catch (err) { status.textContent = '儲存失敗：' + err.message; status.style.color = '#cf222e'; status.style.display = 'inline'; }
+    } else {
+      entry.content = markdown;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown' }));
+      a.download = activeFile.split('/').pop(); a.click(); URL.revokeObjectURL(a.href);
+      exitEditMode(true);
+    }
+  }
+
+  function restoreFile() {
+    if (!activeFile) return;
+    document.getElementById('content').innerHTML = marked.parse(files.get(activeFile).content);
+    document.getElementById('unsaved-dot').style.display = 'none';
+  }
+
+  function onEditInput() { document.getElementById('unsaved-dot').style.display = 'inline-block'; }
+
+  // ── Toolbar ───────────────────────────────────────────────────
+  function fmt(evt, cmd, val) { evt.preventDefault(); document.execCommand(cmd, false, val || null); document.getElementById('content').focus(); }
+  function insertHR(evt) { evt.preventDefault(); document.execCommand('insertHTML', false, '<hr>'); document.getElementById('content').focus(); }
+  function insertLink(evt) { evt.preventDefault(); const u = prompt('連結網址：'); if (u) document.execCommand('createLink', false, u); document.getElementById('content').focus(); }
+
+  // ── Delete file ───────────────────────────────────────────────
+  document.addEventListener('keydown', ev => {
+    if (!activeFile || isEditing) return;
+    if (ev.target.tagName === 'INPUT') return;
+    if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+    ev.preventDefault();
+    const keys = [...files.keys()].sort();
+    const idx = keys.indexOf(activeFile);
+    files.delete(activeFile);
+    updateSidebar();
+    if (files.size === 0) {
+      activeFile = null;
+      document.getElementById('doc-header').style.display = 'none';
+      document.getElementById('content').innerHTML = '';
+      document.getElementById('empty-state').style.display = 'flex';
+    } else {
+      renderFile(keys[idx + 1] || keys[idx - 1]);
+    }
+  });
+
+  // ── Sidebar tree ──────────────────────────────────────────────
+  function buildTree(paths) {
+    const root = {};
+    for (const path of paths) {
+      const parts = path.split('/');
+      let node = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!node[parts[i]]) node[parts[i]] = { __type: 'folder', __children: {} };
+        node = node[parts[i]].__children;
+      }
+      node[parts[parts.length - 1]] = { __type: 'file', __path: path };
+    }
+    return root;
+  }
+
+  function updateSidebar() {
+    const list = document.getElementById('file-list');
+    const count = document.getElementById('file-count');
+    list.innerHTML = '';
+    count.textContent = files.size;
+    count.style.display = files.size ? 'inline' : 'none';
+    const tree = buildTree([...files.keys()].sort());
+    renderTreeNode(tree, list, 0);
+  }
+
+  function renderTreeNode(node, container, depth) {
+    const entries = Object.entries(node).sort(([an, av], [bn, bv]) => {
+      const af = av.__type === 'folder', bf = bv.__type === 'folder';
+      if (af !== bf) return af ? -1 : 1;
+      return an.localeCompare(bn);
+    });
+    for (const [name, val] of entries) {
+      if (val.__type === 'folder') {
+        const folderPath = val.__path || name; // we'll compute full path below
+        // get full path by looking at first child
+        const firstChild = findFirstFilePath(val.__children);
+        const fp = firstChild ? firstChild.split('/').slice(0, depth + 1).join('/') : name;
+        const expanded = expandedFolders.has(fp);
+
+        const item = document.createElement('div');
+        item.className = 'tree-item';
+        item.dataset.folderPath = fp;
+        item.innerHTML = `
+          <span class="indent" style="width:${depth * 12}px"></span>
+          <span class="chevron">${expanded ? '▾' : '▸'}</span>
+          <span class="icon">📁</span>
+          <span class="label">${name}</span>
+        `;
+        item.onclick = () => {
+          if (expandedFolders.has(fp)) expandedFolders.delete(fp);
+          else expandedFolders.add(fp);
+          updateSidebar();
+        };
+        container.appendChild(item);
+
+        if (expanded) {
+          renderTreeNode(val.__children, container, depth + 1);
+        }
+      } else {
+        const item = document.createElement('div');
+        item.className = 'tree-item' + (val.__path === activeFile ? ' active' : '');
+        item.dataset.path = val.__path;
+        item.innerHTML = `
+          <span class="indent" style="width:${depth * 12}px"></span>
+          <span class="chevron"></span>
+          <span class="icon">📄</span>
+          <span class="label" title="${val.__path}">${name}</span>
+        `;
+        item.onclick = () => renderFile(val.__path);
+        container.appendChild(item);
+      }
+    }
+  }
+
+  function findFirstFilePath(node) {
+    for (const val of Object.values(node)) {
+      if (val.__type === 'file') return val.__path;
+      if (val.__type === 'folder') { const r = findFirstFilePath(val.__children); if (r) return r; }
+    }
+    return null;
+  }
+
+  // ── Drag-drop ─────────────────────────────────────────────────
+  const dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover', ev => { ev.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', async ev => { ev.preventDefault(); dz.classList.remove('dragover'); await handleDrop(ev.dataTransfer); });
+  document.body.addEventListener('dragover', ev => ev.preventDefault());
+  document.body.addEventListener('drop', async ev => { ev.preventDefault(); if (ev.dataTransfer.files.length || ev.dataTransfer.items.length) await handleDrop(ev.dataTransfer); });
+
+  async function handleDrop(dataTransfer) {
+    if ('getAsFileSystemHandle' in DataTransferItem.prototype) {
+      for (const item of dataTransfer.items) {
+        if (item.kind !== 'file') continue;
+        const handle = await item.getAsFileSystemHandle();
+        if (handle.kind === 'directory') {
+          await loadDirHandle(handle, '');
+        } else {
+          await loadFileHandle(handle, '');
+        }
+        rootHandles.push({ handle, prefix: '' });
+      }
+      await persistHandles();
+    } else {
+      Array.from(dataTransfer.files).forEach(file => {
+        if (!file.name.match(/\.(md|markdown|yaml|yml)$/i)) return;
+        const r = new FileReader();
+        r.onload = e => { files.set(file.name, { content: e.target.result, handle: null }); updateSidebar(); if (!activeFile) renderFile(file.name); };
+        r.readAsText(file);
+      });
+      return;
+    }
+    updateSidebar();
+    if (!activeFile && files.size > 0) renderFile([...files.keys()].sort()[0]);
+  }
+
+  // ── Resizable sidebar ─────────────────────────────────────────
+  const resizer = document.getElementById('resizer');
+  const sidebar = document.getElementById('sidebar');
+  let resizing = false;
+
+  resizer.addEventListener('mousedown', ev => {
+    resizing = true;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    ev.preventDefault();
+  });
+  document.addEventListener('mousemove', ev => {
+    if (!resizing) return;
+    const newW = ev.clientX;
+    sidebar.style.width = Math.max(140, Math.min(600, newW)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  async function tryRestore() {
+    let entries = [];
+    try {
+      const db = await openDB();
+      entries = await new Promise((res, rej) => {
+        const req = db.transaction('handles', 'readonly').objectStore('handles').getAll();
+        req.onsuccess = e => res(e.target.result);
+        req.onerror = e => rej(e.target.error);
+      });
+    } catch { return; }
+    if (!entries.length) return;
+
+    let needsGesture = false;
+    for (const { handle, prefix } of entries) {
+      const mode = handle.kind === 'directory' ? 'readwrite' : 'read';
+      const perm = await handle.queryPermission({ mode });
+      if (perm === 'granted') {
+        rootHandles.push({ handle, prefix });
+        if (handle.kind === 'directory') await loadDirHandle(handle, prefix);
+        else await loadFileHandle(handle, prefix);
+      } else {
+        needsGesture = true;
+      }
+    }
+    if (files.size > 0) { updateSidebar(); renderFile([...files.keys()].sort()[0]); }
+    if (needsGesture) document.getElementById('restore-btn').style.display = 'flex';
+  }
+
+  tryRestore();
+</script>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#ccc;user-select:none;pointer-events:none">built by Sylvia Lin</div>
+</body>
+</html>
